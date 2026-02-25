@@ -18,17 +18,11 @@ On Laravel side, install the package via composer:
 composer require --dev saucebase/laravel-playwright
 ```
 
-On Playwright side, add the package to your `package.json` dependencies, pointing to the copy included with the Laravel package:
+On Playwright side, install the package via npm:
 
-```json
-{
-    "dependencies": {
-        "@saucebase/laravel-playwright": "file:vendor/saucebase/laravel-playwright"
-    }
-}
+```bash
+npm install @saucebase/laravel-playwright
 ```
-
-Then run `npm install`.
 
 ## ⚙️ Laravel Config
 
