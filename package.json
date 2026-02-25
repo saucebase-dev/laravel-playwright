@@ -1,6 +1,6 @@
 {
   "name": "@saucebase/laravel-playwright",
-  "version": "0.0.0",
+  "version": "v0.0.7",
   "description": "Blends Laravel and Playwright into seamless E2E tests — factories, queries, artisan commands, and time travel.",
   "license": "MIT",
   "repository": {
