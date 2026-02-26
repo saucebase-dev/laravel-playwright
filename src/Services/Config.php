@@ -1,4 +1,6 @@
-<?php declare(strict_types=1);
+<?php
+
+declare(strict_types=1);
 
 namespace Saucebase\LaravelPlaywright\Services;
 
@@ -11,6 +13,7 @@ class Config
     {
         /** @var string $prefix */
         $prefix = LaravelConfig::get('laravel-playwright.prefix', 'playwright');
+
         return $prefix;
     }
 
@@ -21,6 +24,7 @@ class Config
     {
         /** @var string[] $envs */
         $envs = LaravelConfig::get('laravel-playwright.environments', ['local', 'testing']);
+
         return $envs;
     }
 
@@ -28,7 +32,7 @@ class Config
     {
         /** @var string|null $secret */
         $secret = LaravelConfig::get('laravel-playwright.secret', null);
+        
         return $secret;
     }
-
 }

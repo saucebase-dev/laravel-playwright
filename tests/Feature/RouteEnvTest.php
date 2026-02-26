@@ -18,7 +18,7 @@ class RouteEnvTest extends TestCase
 
         $this->app->detectEnvironment(fn() => 'production');
         $this->app->register(ServiceProvider::class, true);
-        $this->app['env'] = 'production';
+        $this->app->offsetSet('env', 'production');
 
         Route::setRoutes(new RouteCollection());
         (new ServiceProvider($this->app))->boot();

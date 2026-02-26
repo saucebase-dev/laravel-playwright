@@ -20,5 +20,5 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["playwright/src"]
+  "include": ["src/playwright/src"]
 }

@@ -13,7 +13,7 @@ class FunctionTest extends TestCase
         include __DIR__ . '/functions.php';
     }
 
-    public function testCallsAFunction() : void
+    public function testCallsAFunction(): void
     {
         $this->postJson('/playwright/function', [
             'function' => 'testFunction1'
@@ -22,7 +22,7 @@ class FunctionTest extends TestCase
             ->assertSee('Hello');
     }
 
-    public function testCallsAFunctionWithArgs() : void
+    public function testCallsAFunctionWithArgs(): void
     {
         $this->postJson('/playwright/function', [
             'function' => 'testFunction2',
@@ -32,7 +32,7 @@ class FunctionTest extends TestCase
             ->assertSee('Hello Supun');
     }
 
-    public function testCallsAFunctionWithNamedArgs() : void
+    public function testCallsAFunctionWithNamedArgs(): void
     {
         $this->postJson('/playwright/function', [
             'function' => 'testFunction3',
@@ -45,7 +45,7 @@ class FunctionTest extends TestCase
             ->assertSee('Hello Supun. You are 24');
     }
 
-    public function testCallsAStaticMethod() : void
+    public function testCallsAStaticMethod(): void
     {
         $this->postJson('/playwright/function', [
             'function' => 'testStaticMethodClass1::sayHello',
@@ -55,14 +55,20 @@ class FunctionTest extends TestCase
             ->assertSee('Says Hello to me');
     }
 
-    public function testCallsAStaticMethodWithNamespace() : void
+    public function testCallsAStaticMethodWithNamespace(): void
     {
         $this->postJson('/playwright/function', [
             'function' => 'Saucebase\LaravelPlaywright\Tests\Helpers\TestableStaticMethod::ping',
         ])
             ->assertOk()
             ->assertSee('pong');
+    }
 
+    public function testRejectsNonCallable(): void
+    {
+        $this->postJson('/playwright/function', [
+            'function' => 'this_function_does_not_exist_anywhere',
+        ])->assertUnprocessable();
     }
 
 }

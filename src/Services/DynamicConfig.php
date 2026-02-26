@@ -47,17 +47,6 @@ class DynamicConfig
 
     }
 
-    private static function loadTime(): void
-    {
-        $time = self::get(self::KEY_TRAVEL);
-        if (!is_string($time)) {
-            return;
-        }
-        $time = Carbon::parse($time);
-        \Carbon\Carbon::setTestNow($time);
-        \Carbon\CarbonImmutable::setTestNow($time);
-    }
-
     private static function loadBootFunctions(): void
     {
 
@@ -72,6 +61,17 @@ class DynamicConfig
             }
         }
 
+    }
+
+    private static function loadTime(): void
+    {
+        $time = self::get(self::KEY_TRAVEL);
+        if (!is_string($time)) {
+            return;
+        }
+        $time = Carbon::parse($time);
+        \Carbon\Carbon::setTestNow($time);
+        \Carbon\CarbonImmutable::setTestNow($time);
     }
 
     public static function set(string $key, mixed $value): void

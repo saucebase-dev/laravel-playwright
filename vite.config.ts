@@ -4,9 +4,9 @@ import dts from 'vite-plugin-dts'
 
 export default defineConfig({
     build: {
-        outDir: 'playwright/dist',
+        outDir: 'dist',
         lib: {
-            entry: resolve(__dirname, 'playwright/src/index.ts'),
+            entry: resolve(__dirname, 'src/playwright/src/index.ts'),
             name: 'LaravelPlaywright',
             fileName: 'laravel-playwright',
         },
@@ -19,5 +19,5 @@ export default defineConfig({
             },
         },
     },
-    plugins: [dts({ include: ['playwright/src'] })],
+    plugins: [dts({ include: ['src/playwright/src'] })],
 })

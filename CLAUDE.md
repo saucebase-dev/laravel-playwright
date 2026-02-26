@@ -18,13 +18,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Static analysis (max level, covers src/ and tests/)
 ./vendor/bin/phpstan analyse --memory-limit=512M
 
-# JS/TS build (outputs to playwright/dist/)
+# JS/TS build (outputs to dist/)
 npm run build   # tsc type-check + vite build
 ```
 
 ## Architecture
 
-This is a dual-language package: a **PHP Laravel package** (`src/`) paired with a **TypeScript Playwright client** (`playwright/src/`).
+This is a dual-language package: a **PHP Laravel package** (`src/`) paired with a **TypeScript Playwright client** (`src/playwright/src/`).
 
 ### How it works
 
@@ -35,7 +35,7 @@ The PHP side registers HTTP routes (under a configurable prefix, default `playwr
 ### PHP package structure
 
 - **`src/ServiceProvider.php`** — registers/merges `config/laravel-playwright.php`, loads routes and `DynamicConfig` only in allowed environments
-- **`src/Controller.php`** — single controller handling all endpoints: `artisan`, `truncate`, `factory`, `query`, `select`, `function`, `dynamicConfig`, `travel`, `registerBootFunction`, `tearDown`
+- **`src/Http/Controllers/`** — one invokable controller per endpoint: `ArtisanController`, `TruncateController`, `FactoryController`, `QueryController`, `SelectController`, `FunctionController`, `DynamicConfigController`, `TravelController`, `RegisterBootFunctionController`, `TearDownController`
 - **`src/Services/Config.php`** — reads `laravel-playwright.*` config keys; `prefix()`, `envs()`, `secret()`
 - **`src/Services/DynamicConfig.php`** — file-backed per-test state store; loaded at boot, deleted at tearDown
 - **`src/Services/Truncate.php`** — truncates DB tables across connections; includes SQLite fallback (catches `QueryException` when `sqlite_sequence` doesn't exist)
@@ -49,7 +49,7 @@ The PHP side registers HTTP routes (under a configurable prefix, default `playwr
 'secret'       => env('PLAYWRIGHT_SECRET', null),
 ```
 
-### TypeScript client (`playwright/src/index.ts`)
+### TypeScript client (`src/playwright/src/index.ts`)
 
 Exports `test` (a Playwright fixture extension) and `Laravel` class. The fixture injects a `laravel` object and auto-calls `tearDown()`. The `LaravelOptions` interface adds `laravelBaseUrl` and `laravelSecret` as Playwright config options. The secret, if set, is forwarded as the `X-Playwright-Secret` header on every request.
 

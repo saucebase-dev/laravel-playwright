@@ -13,29 +13,27 @@
   "homepage": "https://github.com/sauce-base/laravel-playwright",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview"
+    "build": "tsc && vite build"
   },
   "devDependencies": {
-    "@types/node": "^22.10.5",
-    "typescript": "~5.6.2",
-    "vite": "^6.0.5"
+    "@types/node": "^25.3.1",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1"
   },
   "peerDependencies": {
-    "@playwright/test": "^1.49.1"
+    "@playwright/test": "^1.58.2"
   },
   "exports": {
     ".": {
-      "types": "./playwright/dist/index.d.ts",
-      "import": "./playwright/dist/laravel-playwright.js",
-      "require": "./playwright/dist/laravel-playwright.umd.cjs"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/laravel-playwright.js",
+      "require": "./dist/laravel-playwright.umd.cjs"
     }
   },
   "files": [
-    "playwright/dist"
+    "dist"
   ],
   "dependencies": {
-    "vite-plugin-dts": "^4.5.0"
+    "vite-plugin-dts": "^4.5.4"
   }
 }

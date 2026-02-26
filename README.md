@@ -8,7 +8,7 @@ This repository contains a Laravel and a Playwright library to help you write E2
 - Run database queries
 - Run PHP functions
 - Update Laravel config while a test is running (until the test ends and calls `tearDown`).
-- Registering a boot function to run on each Laravel request. You can use this feature to mock a service dependency, for example.
+- Register a boot function to run on every subsequent Laravel request in the test — useful for swapping service bindings.
 - Traveling to a specific time in the application during the test
 
 ## 📦 Installation
@@ -22,7 +22,7 @@ composer require --dev saucebase/laravel-playwright
 On Playwright side, install the package via npm:
 
 ```bash
-npm install @saucebase/laravel-playwright
+npm install @saucebase/laravel-playwright --save-dev
 ```
 
 ## ⚙️ Laravel Config
@@ -219,12 +219,67 @@ test('example', async ({ laravel }) => {
     /** similar to Laravel's `travelTo` method */
     await laravel.travel('2022-01-01 12:00:00');
 
-    /** 🚀 REGISTER A BOOT FUNCTION */
-    /** useful to mock a service dependency, for example */
-    await laravel.registerBootFunction('App\\E2EHelper::swapPaymentService');
+});
+```
+
+## 🔁 Boot Functions
+
+Boot functions let you run PHP code **at the start of every subsequent Laravel request** during a test. This is the right tool when you need a service binding or side effect to be in place for browser-driven requests — not just during test setup.
+
+A common use case is swapping a real external service (payment gateway, mailer, SMS provider) with a fake for the duration of a test.
+
+**1. Create a helper class in your app** (e.g. `app/E2EHelpers.php`):
+
+```php
+<?php
+
+namespace App;
+
+use App\Services\PaymentGateway;
+use App\Services\FakePaymentGateway;
+use App\Services\Mailer;
+use App\Services\NullMailer;
+
+class E2EHelpers
+{
+    /**
+     * Swap real services for fakes. Called at boot on every request in the test.
+     */
+    public static function useFakeServices(): void
+    {
+        app()->bind(PaymentGateway::class, FakePaymentGateway::class);
+        app()->bind(Mailer::class, NullMailer::class);
+    }
+}
+```
+
+**2. Register it in your Playwright test:**
+
+```ts
+import { test } from '@saucebase/laravel-playwright';
+
+test('checkout with fake payment gateway', async ({ laravel, page }) => {
+
+    // Register once — runs at boot on every subsequent request this test makes
+    await laravel.registerBootFunction('App\\E2EHelpers::useFakeServices');
+
+    // From here, every page load and API call the browser makes will use the fakes
+    const user = await laravel.factory('User');
+    await laravel.artisan('db:seed', ['--class', 'ProductSeeder']);
+
+    await page.goto('/checkout');
+    await page.fill('[name="card_number"]', '4242424242424242');
+    await page.click('button[type="submit"]');
+
+    await expect(page.locator('.order-confirmation')).toBeVisible();
 
 });
 ```
+
+> **Why not use `callFunction` instead?**
+> `callFunction` runs once and returns. `registerBootFunction` runs at the start of **every** request the browser makes during the test, so service bindings registered in the boot phase are in place for the full request lifecycle — including middleware, controllers, and event listeners.
+
+> **Note:** The helper class only needs to exist in your `local` and `testing` environments. You can guard it with an environment check or keep it out of production deployments entirely.
 
 ## 🙏 Credits
 

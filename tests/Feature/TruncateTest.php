@@ -7,6 +7,7 @@ use Saucebase\LaravelPlaywright\Tests\TestCase;
 
 class TruncateTest extends TestCase
 {
+
     public function testTruncates(): void
     {
         UserModel::factory()->count(3)->create();
@@ -16,4 +17,12 @@ class TruncateTest extends TestCase
 
         $this->assertCount(0, UserModel::all());
     }
+
+    public function testRejectsNonArrayConnections(): void
+    {
+        $this->postJson('/playwright/truncate', [
+            'connections' => 'not-an-array',
+        ])->assertUnprocessable();
+    }
+
 }

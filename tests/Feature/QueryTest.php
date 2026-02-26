@@ -8,7 +8,7 @@ use Saucebase\LaravelPlaywright\Tests\TestCase;
 class QueryTest extends TestCase
 {
 
-    public function testRunsAQuery() : void
+    public function testRunsAQuery(): void
     {
         $users = UserModel::factory()
             ->count(3)
@@ -19,6 +19,12 @@ class QueryTest extends TestCase
         ])->assertOk();
 
         $this->assertEquals('John Doe', $users[0]?->refresh()->name);
+    }
+
+    public function testRequiresQuery(): void
+    {
+        $this->postJson('/playwright/query', [])
+            ->assertUnprocessable();
     }
 
 }
