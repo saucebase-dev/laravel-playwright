@@ -27,4 +27,24 @@ class DynamicConfigTest extends TestCase
 
     }
 
+    public function testGetAllReturnEmptyArrayWhenFileDoesNotExist(): void
+    {
+        $file = \Saucebase\LaravelPlaywright\Services\DynamicConfig::getFilePath();
+        if (file_exists($file)) {
+            unlink($file);
+        }
+        $result = \Saucebase\LaravelPlaywright\Services\DynamicConfig::getAll();
+        $this->assertSame([], $result);
+    }
+
+    public function testLoadDoesNotThrowWhenFileIsAbsent(): void
+    {
+        $file = \Saucebase\LaravelPlaywright\Services\DynamicConfig::getFilePath();
+        if (file_exists($file)) {
+            unlink($file);
+        }
+        \Saucebase\LaravelPlaywright\Services\DynamicConfig::load();
+        $this->addToAssertionCount(1);
+    }
+
 }

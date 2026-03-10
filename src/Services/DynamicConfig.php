@@ -32,25 +32,29 @@ class DynamicConfig
     public static function load(): void
     {
         $file = self::getFilePath();
-        $content = file_exists($file) ? (string) file_get_contents($file) : '{}';
-        $data = json_decode($content, true);
-
-        if (is_array($data)) {
-            foreach ($data as $key => $value) {
-                assert(is_string($key));
-                config([$key => $value]);
-            }
-
-            self::loadTime();
-            self::loadBootFunctions();
+        $content = @file_get_contents($file);
+        if ($content === false) {
+            return;
         }
-
+        $decoded = json_decode($content, true);
+        if (!is_array($decoded)) {
+            return;
+        }
+        /** @var array<string, mixed> $data */
+        $data = $decoded;
+        foreach ($data as $key => $value) {
+            config([$key => $value]);
+        }
+        self::loadTime($data);
+        self::loadBootFunctions($data);
     }
 
-    private static function loadBootFunctions(): void
+    /**
+     * @param array<string, mixed> $data
+     */
+    private static function loadBootFunctions(array $data): void
     {
-
-        $functions = self::get(self::KEY_BOOT_FUNCTIONS);
+        $functions = $data[self::KEY_BOOT_FUNCTIONS] ?? null;
         if (!is_array($functions)) {
             return;
         }
@@ -60,12 +64,14 @@ class DynamicConfig
                 $function();
             }
         }
-
     }
 
-    private static function loadTime(): void
+    /**
+     * @param array<string, mixed> $data
+     */
+    private static function loadTime(array $data): void
     {
-        $time = self::get(self::KEY_TRAVEL);
+        $time = $data[self::KEY_TRAVEL] ?? null;
         if (!is_string($time)) {
             return;
         }
@@ -94,11 +100,15 @@ class DynamicConfig
     public static function getAll(): array
     {
         $file = self::getFilePath();
-        if (!file_exists($file)) {
+        $content = @file_get_contents($file);
+        if ($content === false) {
+            return [];
+        }
+        $json = json_decode($content, true);
+        if (!is_array($json)) {
             return [];
         }
         /** @var array<string, mixed> $json */
-        $json = json_decode((string) file_get_contents($file), true);
         return $json;
     }
 
