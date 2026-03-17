@@ -1,16 +1,16 @@
 {
-  "name": "@saucebase/laravel-playwright",
-  "version": "v1.0.1",
+  "name": "@saucebase/playwright-laravel",
+  "version": "v0.0.8",
   "description": "Blends Laravel and Playwright into seamless E2E tests — factories, queries, artisan commands, and time travel.",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/sauce-base/laravel-playwright"
+    "url": "https://github.com/saucebase-dev/laravel-playwright"
   },
   "bugs": {
-    "url": "https://github.com/sauce-base/laravel-playwright/issues"
+    "url": "https://github.com/saucebase-dev/laravel-playwright/issues"
   },
-  "homepage": "https://github.com/sauce-base/laravel-playwright",
+  "homepage": "https://github.com/saucebase-dev/laravel-playwright",
   "type": "module",
   "scripts": {
     "build": "tsc && vite build"
