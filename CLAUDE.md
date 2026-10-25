@@ -38,6 +38,7 @@ The PHP side registers HTTP routes (under a configurable prefix, default `playwr
 
 - **`src/ServiceProvider.php`** — registers/merges `config/laravel-playwright.php`, loads routes and `DynamicConfig` only in allowed environments
 - **`src/Http/Controllers/`** — one invokable controller per endpoint: `ArtisanController`, `TruncateController`, `FactoryController`, `QueryController`, `SelectController`, `FunctionController`, `DynamicConfigController`, `TravelController`, `RegisterBootFunctionController`, `TearDownController`
+- **`src/Console/EnvCommand.php`** — `playwright:env {environment=e2e} {--url} {--force}`: writes `.env.<environment>` as a full copy of `.env` (or `.env.example`) with the suite's overrides; the single source of truth for those overrides
 - **`src/Services/Config.php`** — reads `laravel-playwright.*` config keys; `prefix()`, `envs()`, `secret()`
 - **`src/Services/DynamicConfig.php`** — file-backed per-test state store keyed by the `X-Playwright-Test` id (validated as a safe file name); loaded at boot, deleted at tearDown
 - **`src/Services/Truncate.php`** — truncates DB tables across connections; includes SQLite fallback (catches `QueryException` when `sqlite_sequence` doesn't exist)

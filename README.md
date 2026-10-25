@@ -93,20 +93,28 @@ export default defineConfig<LaravelOptions>({
 
 Run the suite on its own server and database, so it never touches your dev app or its data. This works the same however you serve the app day to day: Herd, Valet, Sail, Docker or `artisan serve`.
 
-**1. Create `.env.e2e`.** Copy `.env` and give it its own database and port:
+**1. Create `.env.e2e`:**
+
+```bash
+php artisan playwright:env
+```
+
+This writes a copy of your `.env` with its own server and database. Laravel loads one env file, not one on top of another, so the copy keeps everything else your app needs (`APP_KEY`, secrets, mail). Only these change:
 
 ```dotenv
 APP_ENV=e2e
 APP_URL=http://localhost:8100
 DB_CONNECTION=sqlite
+DB_URL=
 DB_DATABASE=database/e2e.sqlite
 SESSION_DRIVER=file
 CACHE_STORE=file
 QUEUE_CONNECTION=sync
 MAIL_MAILER=log
+REDIS_PREFIX=<your prefix>e2e_
 ```
 
-Keep `.env.e2e` out of git like `.env`.
+Options: `php artisan playwright:env <environment> --url=http://localhost:9000 --force`. Edit the file afterwards for anything else the suite needs. Keep `.env.e2e` out of git like `.env`, and in CI, run the command after creating `.env`.
 
 **2. Let Playwright start the server:**
 
