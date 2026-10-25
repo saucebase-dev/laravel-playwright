@@ -12,6 +12,8 @@ class RegisterBootFunctionController
 
     public function __invoke(Request $request): JsonResponse
     {
+        $id = DynamicConfig::requireId($request);
+
         $request->validate([
             'function' => 'string|required',
         ]);
@@ -21,11 +23,11 @@ class RegisterBootFunctionController
         if (!is_callable($function))
             abort(422, 'Function is not callable');
 
-        $currentBootFunctions = DynamicConfig::get(DynamicConfig::KEY_BOOT_FUNCTIONS, []);
+        $currentBootFunctions = DynamicConfig::get($id, DynamicConfig::KEY_BOOT_FUNCTIONS, []);
         assert(is_array($currentBootFunctions));
         $currentBootFunctions[] = $function;
 
-        DynamicConfig::set(DynamicConfig::KEY_BOOT_FUNCTIONS, $currentBootFunctions);
+        DynamicConfig::set($id, DynamicConfig::KEY_BOOT_FUNCTIONS, $currentBootFunctions);
 
         return Response::json();
     }

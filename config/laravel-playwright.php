@@ -11,7 +11,7 @@ return [
     /**
      * The environments in which the Playwright endpoints should be available.
      */
-    'environments' => ['local', 'testing'],
+    'environments' => ['e2e', 'testing'],
 
     /**
      * The secret key used to authenticate requests to the Playwright endpoints.

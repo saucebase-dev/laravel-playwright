@@ -45,9 +45,10 @@ return [
 
     /**
      * The environments in which the testing endpoints are enabled.
-     * CAUTION: Enabling testing endpoints in production is a critical security issue.
+     * CAUTION: the endpoints run arbitrary PHP and SQL. Never enable them in
+     * production, nor in `local`, the environment your own dev server runs in.
      */
-    'environments' => ['local', 'testing'],
+    'environments' => ['e2e', 'testing'],
 
     /**
      * Optional secret token to authenticate Playwright requests.
@@ -87,6 +88,45 @@ export default defineConfig<LaravelOptions>({
     },
 });
 ```
+
+## 🏝️ A dedicated environment
+
+Run the suite on its own server and database, so it never touches your dev app or its data. This works the same however you serve the app day to day: Herd, Valet, Sail, Docker or `artisan serve`.
+
+**1. Create `.env.e2e`.** Copy `.env` and give it its own database and port:
+
+```dotenv
+APP_ENV=e2e
+APP_URL=http://localhost:8100
+DB_CONNECTION=sqlite
+DB_DATABASE=database/e2e.sqlite
+SESSION_DRIVER=file
+CACHE_STORE=file
+QUEUE_CONNECTION=sync
+MAIL_MAILER=log
+```
+
+Keep `.env.e2e` out of git like `.env`.
+
+**2. Let Playwright start the server:**
+
+```ts
+import { defineConfig } from '@playwright/test';
+import { laravelServer, type LaravelOptions } from '@saucebase/laravel-playwright';
+
+export default defineConfig<LaravelOptions>({
+    use: { baseURL: 'http://localhost:8100' },
+    webServer: laravelServer(),   // migrate, then php artisan serve --env=e2e on APP_URL's port
+});
+```
+
+`laravelServer({ env, host, workers, cwd, migrate })` returns a Playwright `webServer` entry. It serves the app on the port of `.env.e2e`'s `APP_URL` and waits on that URL, because an app that tells tenants apart by host answers 404 on any other. It migrates the database first (creating the SQLite file if needed), because an app that reads the database on every request, such as a tenant lookup at boot, can't be migrated over HTTP while its tables are missing. Pass `migrate: false` to skip that. It sets `APP_ENV` and `PHP_CLI_SERVER_WORKERS` (4 by default) for the server, and reuses a running one outside CI. It gives the server its own config, route and event caches (`bootstrap/cache/e2e/`). A config you cached with `config:cache` would otherwise skip every env file and give the server your dev database. It refuses to start if:
+
+- `.env.e2e` is missing, because Laravel would then fall back to `.env`.
+- `APP_URL` is missing or not `http:`. `artisan serve` has no TLS.
+- The Playwright process already has another `APP_ENV`. The server inherits the process's environment, and real environment variables override any env file, so `import 'dotenv/config'` (which loads `.env`) would give the server your dev database. To read values from `.env.e2e` in the config, use `config({ path: '.env.e2e' })` from dotenv.
+
+**Subdomains and multi-tenancy.** Chromium resolves every `*.localhost` to your machine, so `http://acme.localhost:8100` reaches the same server with no DNS or hosts-file setup. To use a real wildcard host instead (Herd or Valet `*.app.test`), skip `laravelServer()` and point `baseURL` at that host, served with `APP_ENV=e2e`.
 
 ## 🔒 Security
 
@@ -205,7 +245,13 @@ test('example', async ({ laravel }) => {
 
 ## 🔄 Dynamic Configuration
 
-You can update Laravel config for **ALL** subsequent requests until the test ends.
+You can update Laravel config for every subsequent request **of the same test**, until the test ends.
+
+The state is kept per test. The `laravel` fixture gives each test an id and sends it in an `X-Playwright-Test` header, on its own calls and on the browser's requests to the app. The server applies a test's state only to requests that carry its id. Parallel tests never see or remove each other's config, time or boot functions, and requests without the header (your own browser, a queue worker) see none.
+
+- Only requests to the app carry the header: the `baseURL` host and its subdomains. Third-party requests (Stripe, CDNs) are left alone, so no CORS preflight fails. Override the match with the `laravelIsAppUrl: (url: URL) => boolean` option.
+- The header is added with `context.route()`. If you add your own route for app URLs, call `route.fallback()`, not `route.continue()`, so the header is still added.
+- A context you create yourself (`browser.newContext()`) doesn't get the header.
 
 ```ts
 import { test } from '@saucebase/laravel-playwright';
@@ -283,7 +329,19 @@ test('checkout with fake payment gateway', async ({ laravel, page }) => {
 > **Why not use `callFunction` instead?**
 > `callFunction` runs once and returns. `registerBootFunction` runs at the start of **every** request the browser makes during the test, so service bindings registered in the boot phase are in place for the full request lifecycle — including middleware, controllers, and event listeners.
 
-> **Note:** The helper class only needs to exist in your `local` and `testing` environments. You can guard it with an environment check or keep it out of production deployments entirely.
+> **Note:** The helper class only needs to exist in your `e2e` and `testing` environments. You can guard it with an environment check or keep it out of production deployments entirely.
+
+## 🤖 Laravel Boost
+
+The package ships a [Laravel Boost](https://laravel.com/docs/boost) guideline and a `laravel-playwright-development` skill, covering the e2e environment, per-test state, subdomains and common failures. Boost asks before including third-party packages: pick `saucebase/laravel-playwright` in `php artisan boost:install`, or add it to `packages` in `boost.json` and run `php artisan boost:update`.
+
+## ⬆️ Upgrading from v1
+
+- **The endpoints are off in `local`.** The default `environments` is now `['e2e', 'testing']`. Serve the suite with `APP_ENV=e2e` (see [A dedicated environment](#️-a-dedicated-environment)). If you published the config, update `environments` there.
+- **Dynamic config, `travel()` and boot functions are per test.** State moved from `storage/laravel-playwright-config.json` to `storage/framework/playwright/<test-id>.json`, and only applies to requests that carry the test's `X-Playwright-Test` header. The fixture sends the header for you. If you call the endpoints from your own client, send it yourself; `dynamicConfig`, `travel` and `registerBootFunction` return 400 without it.
+- `DynamicConfig::set()`, `get()`, `getAll()`, `load()` and `delete()` now take the test id as their first argument.
+- **Artisan commands run from the application root**, like the CLI, rather than the web server's `public/`.
+- Requires Laravel 12 or 13.
 
 ## 🙏 Credits
 

@@ -25,6 +25,25 @@ class RouteEnvTest extends TestCase
         $this->post('playwright/artisan')->assertNotFound();
     }
 
+    /**
+     * The endpoints run arbitrary PHP and SQL, so the developer's own `local`
+     * server must never expose them. E2E runs against a dedicated environment.
+     */
+    public function testRoutesAreOffInLocalAndOnInE2e(): void
+    {
+        assert($this->app !== null);
+
+        $this->app->offsetSet('env', 'local');
+        Route::setRoutes(new RouteCollection());
+        (new ServiceProvider($this->app))->boot();
+        $this->post('playwright/truncate')->assertNotFound();
+
+        $this->app->offsetSet('env', 'e2e');
+        Route::setRoutes(new RouteCollection());
+        (new ServiceProvider($this->app))->boot();
+        $this->post('playwright/truncate')->assertOk();
+    }
+
     public function testSupportsCustomPrefix(): void
     {
         config(['laravel-playwright.prefix' => 'api/e2e']);

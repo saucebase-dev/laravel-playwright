@@ -12,9 +12,9 @@ class TravelTest extends TestCase
 
         $this->postJson('/playwright/travel', [
             'to' => '2025-01-01',
-        ])->assertOk();
+        ], $this->testHeader())->assertOk();
 
-        $this->reloadApplication();
+        $this->bootFor('test-id');
         $this->assertEquals('2025-01-01', now()->format('Y-m-d'));
 
     }

@@ -12,10 +12,10 @@ class RegisterBootFunctionTest extends TestCase
 
         $this->postJson('/playwright/registerBootFunction', [
             'function' => 'Saucebase\LaravelPlaywright\Tests\Feature\RegisterBootFunctionTest::setGlobalVariable',
-        ])
+        ], $this->testHeader())
             ->assertOk();
 
-        $this->reloadApplication();
+        $this->bootFor('test-id');
         $this->assertEquals('Yes', $GLOBALS['bootRunning']);
 
     }

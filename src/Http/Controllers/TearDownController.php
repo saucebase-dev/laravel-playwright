@@ -4,14 +4,15 @@ namespace Saucebase\LaravelPlaywright\Http\Controllers;
 
 use Saucebase\LaravelPlaywright\Services\DynamicConfig;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Response;
 
 class TearDownController
 {
 
-    public function __invoke(DynamicConfig $dynamicConfig): JsonResponse
+    public function __invoke(Request $request): JsonResponse
     {
-        $dynamicConfig->delete();
+        DynamicConfig::delete(DynamicConfig::id($request));
 
         return Response::json();
     }

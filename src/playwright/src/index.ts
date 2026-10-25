@@ -1,4 +1,10 @@
 import {APIRequestContext, test as playwrightTest} from '@playwright/test';
+import {isAppUrl} from './config.ts';
+
+export {isAppUrl, laravelServer, type LaravelServerOptions} from './config.ts';
+
+/** Ties a request to the test that made it, so its state applies to it alone. */
+export const TEST_HEADER = 'X-Playwright-Test';
 
 export interface LaravelOptions {
     /**
@@ -10,20 +16,45 @@ export interface LaravelOptions {
      * Optional secret token sent as X-Playwright-Secret header
      */
     laravelSecret: string | undefined;
+    /**
+     * Which browser requests go to the app and carry the test header.
+     * @default the base URL's host and its subdomains
+     */
+    laravelIsAppUrl: ((url: URL) => boolean) | undefined;
 }
 
 interface LaravelFixtures {
     laravel: Laravel;
+    /** Unique per test; the server keeps each test's config, time and boot functions apart by it. */
+    laravelTestId: string;
 }
 
 export const test = playwrightTest.extend<LaravelFixtures & LaravelOptions>({
 
     laravelBaseUrl: [undefined, {option: true}],
     laravelSecret: [undefined, {option: true}],
+    laravelIsAppUrl: [undefined, {option: true}],
 
-    laravel: async ({ laravelBaseUrl, laravelSecret, baseURL, request }, use) => {
+    laravelTestId: async ({}, use) => {
+        await use(crypto.randomUUID());
+    },
+
+    /**
+     * Adds the test header to the browser's requests to the app only. `extraHTTPHeaders`
+     * would send it to third parties too, turning their requests into CORS preflights
+     * that fail. `fallback()` lets any route registered later still handle the request.
+     */
+    context: async ({ context, baseURL, laravelIsAppUrl, laravelTestId }, use) => {
+        const matches = laravelIsAppUrl ?? ((url: URL) => isAppUrl(url, baseURL));
+        await context.route(matches, (route) => route.fallback({
+            headers: {...route.request().headers(), [TEST_HEADER]: laravelTestId},
+        }));
+        await use(context);
+    },
+
+    laravel: async ({ laravelBaseUrl, laravelSecret, laravelTestId, baseURL, request }, use) => {
         const baseUrl = laravelBaseUrl || baseURL + '/playwright'
-        const laravel = new Laravel(baseUrl, request, laravelSecret);
+        const laravel = new Laravel(baseUrl, request, laravelSecret, laravelTestId);
         await use(laravel);
         await laravel.tearDown();
     }
@@ -35,12 +66,13 @@ export class Laravel {
     constructor(
         private baseUrl: string,
         private request: APIRequestContext,
-        private secret: string | undefined = undefined
+        private secret: string | undefined = undefined,
+        public readonly testId: string = crypto.randomUUID(),
     ) {}
 
     async call<T = unknown>(endpoint: string, data: object = {}) : Promise<T> {
         const url = this.baseUrl.replace(/\/$/, '') + endpoint;
-        const headers: Record<string, string> = {'Accept': 'application/json'};
+        const headers: Record<string, string> = {'Accept': 'application/json', [TEST_HEADER]: this.testId};
         if (this.secret) headers['X-Playwright-Secret'] = this.secret;
         const response = await this.request.post(url, {data, headers});
         if (response.status() !== 200) {

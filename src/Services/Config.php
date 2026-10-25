@@ -23,7 +23,7 @@ class Config
     public static function envs(): array
     {
         /** @var string[] $envs */
-        $envs = LaravelConfig::get('laravel-playwright.environments', ['local', 'testing']);
+        $envs = LaravelConfig::get('laravel-playwright.environments', ['e2e', 'testing']);
 
         return $envs;
     }

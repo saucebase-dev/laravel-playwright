@@ -10,16 +10,21 @@ class TearDownTest extends TestCase
 
     public function testTearDown(): void
     {
-        DynamicConfig::set('myconfig', true);
+        DynamicConfig::set('test-id', 'myconfig', true);
+        $this->assertTrue(DynamicConfig::get('test-id', 'myconfig'));
 
-        $content = (string) file_get_contents(storage_path('laravel-playwright-config.json'));
-        /** @var array<mixed> $data */
-        $data = @json_decode($content, true);
-        $this->assertEquals(true, $data['myconfig']);
+        $this->postJson('/playwright/tearDown', [], $this->testHeader())->assertOk();
+
+        $this->assertSame([], DynamicConfig::getAll('test-id'));
+    }
+
+    public function testTearDownWithoutTheHeaderIsANoOp(): void
+    {
+        DynamicConfig::set('test-id', 'myconfig', true);
 
         $this->postJson('/playwright/tearDown')->assertOk();
 
-        $this->assertFileDoesNotExist(storage_path('laravel-playwright-config.json'));
+        $this->assertSame(['myconfig' => true], DynamicConfig::getAll('test-id'));
     }
 
 }
