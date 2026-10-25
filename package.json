@@ -14,7 +14,7 @@
   "type": "module",
   "scripts": {
     "build": "tsc && vite build",
-    "test": "node --test src/playwright/tests/"
+    "test": "node --test 'src/playwright/tests/*.test.ts'"
   },
   "devDependencies": {
     "@types/node": "^25.3.1",

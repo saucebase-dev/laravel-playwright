@@ -21,7 +21,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # JS/TS build (outputs to dist/)
 npm run build   # tsc type-check + vite build
-npm test        # node --test on src/playwright/tests (pure helpers)
+npm test        # node --test on src/playwright/tests/*.test.ts (pure helpers)
 ```
 
 ## Architecture
