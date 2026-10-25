@@ -12,6 +12,8 @@ class DynamicConfigController
 
     public function __invoke(Request $request): JsonResponse
     {
+        DynamicConfig::requireId($request);
+
         $request->validate([
             'key' => 'string|required',
             'value' => 'required',
@@ -20,7 +22,7 @@ class DynamicConfigController
         $key = (string) $request->string('key');
         $value = $request->input('value');
 
-        DynamicConfig::set($key, $value);
+        DynamicConfig::set(DynamicConfig::requireId($request), $key, $value);
 
         return Response::json();
     }

@@ -13,6 +13,8 @@ class TravelController
 
     public function __invoke(Request $request): JsonResponse
     {
+        $id = DynamicConfig::requireId($request);
+
         $request->validate([
             'to' => 'string|required',
         ]);
@@ -25,7 +27,7 @@ class TravelController
             abort(422, 'Invalid date');
         }
 
-        DynamicConfig::set(DynamicConfig::KEY_TRAVEL, $to);
+        DynamicConfig::set($id, DynamicConfig::KEY_TRAVEL, $to);
 
         return Response::json();
     }

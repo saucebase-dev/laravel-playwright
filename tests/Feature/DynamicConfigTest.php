@@ -2,6 +2,7 @@
 
 namespace Saucebase\LaravelPlaywright\Tests\Feature;
 
+use Saucebase\LaravelPlaywright\Services\DynamicConfig;
 use Saucebase\LaravelPlaywright\Tests\TestCase;
 
 class DynamicConfigTest extends TestCase
@@ -9,41 +10,36 @@ class DynamicConfigTest extends TestCase
 
     public function testCreateDynamicConfig(): void
     {
-
         $this->postJson('/playwright/dynamicConfig', [
             'key' => 'test_key',
             'value' => 'test_value',
-        ])->assertOk();
+        ], $this->testHeader())->assertOk();
 
-        $file = storage_path('laravel-playwright-config.json');
-        $this->assertTrue(file_exists($file));
-        $content= (string) file_get_contents($file);
-
-        $json = json_decode($content, true);
-
-        $this->assertIsArray($json);
-        $this->assertArrayHasKey('test_key', $json);
-        $this->assertEquals('test_value', $json['test_key']);
-
+        $this->assertSame(['test_key' => 'test_value'], DynamicConfig::getAll('test-id'));
     }
 
-    public function testGetAllReturnEmptyArrayWhenFileDoesNotExist(): void
+    public function testAppliesTheConfigOnTheNextRequestOfTheSameTest(): void
     {
-        $file = \Saucebase\LaravelPlaywright\Services\DynamicConfig::getFilePath();
-        if (file_exists($file)) {
-            unlink($file);
-        }
-        $result = \Saucebase\LaravelPlaywright\Services\DynamicConfig::getAll();
-        $this->assertSame([], $result);
+        $this->postJson('/playwright/dynamicConfig', [
+            'key' => 'app.name',
+            'value' => 'Changed',
+        ], $this->testHeader())->assertOk();
+
+        $this->bootFor('test-id');
+
+        $this->assertSame('Changed', config('app.name'));
     }
 
-    public function testLoadDoesNotThrowWhenFileIsAbsent(): void
+    public function testGetAllReturnsEmptyArrayWithoutState(): void
     {
-        $file = \Saucebase\LaravelPlaywright\Services\DynamicConfig::getFilePath();
-        if (file_exists($file)) {
-            unlink($file);
-        }
-        \Saucebase\LaravelPlaywright\Services\DynamicConfig::load();
+        $this->assertSame([], DynamicConfig::getAll('test-id'));
+        $this->assertSame([], DynamicConfig::getAll(null));
+    }
+
+    public function testLoadDoesNotThrowWithoutState(): void
+    {
+        DynamicConfig::load('test-id');
+        DynamicConfig::load(null);
         $this->addToAssertionCount(1);
     }
 

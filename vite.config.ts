@@ -11,7 +11,7 @@ export default defineConfig({
             fileName: 'laravel-playwright',
         },
         rollupOptions: {
-            external: ['@playwright/test'],
+            external: ['@playwright/test', /^node:/],
             output: {
                 globals: {
                     '@playwright/test': 'PlaywrightTest',

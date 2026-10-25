@@ -24,9 +24,9 @@ class ServiceProvider extends BaseServiceProvider
         if (App::environment(...Config::envs())) {
             $this->loadRoutesFrom(__DIR__ . '/routes/e2e.php');
 
-            /** @var DynamicConfig $dynamicConfig */
-            $dynamicConfig = app(DynamicConfig::class);
-            $dynamicConfig->load();
+            // The HTTP kernel binds the request before providers boot, so a test's
+            // state is in place before anything else in the app reads config.
+            DynamicConfig::load(DynamicConfig::id($this->app->make('request')));
         }
 
     }

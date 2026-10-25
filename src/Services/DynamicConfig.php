@@ -3,16 +3,23 @@
 namespace Saucebase\LaravelPlaywright\Services;
 
 use Carbon\Carbon;
+use Illuminate\Http\Request;
 
 /**
- * Usually, E2E tests calls multiple routes in a single test.
+ * Usually, E2E tests call multiple routes in a single test.
  * Sometimes, we need to change a config in the Laravel app for a single test.
- * This class handles that by creating a laravel-playwright-config.json file in the storage directory.
- * Which will be deleted when you call playwright/tearDown route
- * (which is called automatically after each test when using our Playwright library).
+ *
+ * State is kept per test: the Playwright fixture sends a test id in the
+ * X-Playwright-Test header, on its own calls and on the browser's requests.
+ * Each id gets its own file under storage/framework/playwright, applied only to
+ * requests carrying that id, and deleted when that test calls tearDown.
+ * Parallel tests therefore never see or remove each other's state, and a request
+ * without the header (the developer's browser, a queue worker) sees none.
  */
 class DynamicConfig
 {
+
+    const HEADER = 'X-Playwright-Test';
 
     /**
      * Used for time traveling
@@ -24,24 +31,47 @@ class DynamicConfig
      */
     const KEY_BOOT_FUNCTIONS = 'app.e2e.bootFunctions';
 
-    public static function getFilePath(): string
+    /**
+     * The test id of a request, or null when it has none or it is not a safe file name.
+     */
+    public static function id(Request $request): ?string
     {
-        return storage_path('laravel-playwright-config.json');
+        $id = $request->header(self::HEADER);
+
+        return is_string($id) && self::isValidId($id) ? $id : null;
     }
 
-    public static function load(): void
+    /**
+     * The test id of a request that writes state; 400 without one.
+     */
+    public static function requireId(Request $request): string
     {
-        $file = self::getFilePath();
-        $content = @file_get_contents($file);
-        if ($content === false) {
-            return;
+        return self::id($request) ?? abort(400, 'Missing or invalid ' . self::HEADER . ' header.');
+    }
+
+    public static function isValidId(string $id): bool
+    {
+        return preg_match('/^[A-Za-z0-9_-]{1,64}$/', $id) === 1;
+    }
+
+    public static function directory(): string
+    {
+        return storage_path('framework/playwright');
+    }
+
+    public static function path(?string $id): ?string
+    {
+        if ($id === null || !self::isValidId($id)) {
+            return null;
         }
-        $decoded = json_decode($content, true);
-        if (!is_array($decoded)) {
-            return;
-        }
-        /** @var array<string, mixed> $data */
-        $data = $decoded;
+
+        return self::directory() . DIRECTORY_SEPARATOR . $id . '.json';
+    }
+
+    public static function load(?string $id): void
+    {
+        $data = self::getAll($id);
+
         foreach ($data as $key => $value) {
             config([$key => $value]);
         }
@@ -80,42 +110,44 @@ class DynamicConfig
         \Carbon\CarbonImmutable::setTestNow($time);
     }
 
-    public static function set(string $key, mixed $value): void
+    public static function set(string $id, string $key, mixed $value): void
     {
-        $file = self::getFilePath();
-        $data = self::getAll();
+        $file = self::path($id);
+        if ($file === null) {
+            throw new \InvalidArgumentException("Invalid test id [{$id}].");
+        }
+
+        $data = self::getAll($id);
         $data[$key] = $value;
-        file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT));
+
+        if (!is_dir(self::directory())) {
+            @mkdir(self::directory(), 0755, true);
+        }
+        file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT), LOCK_EX);
     }
 
-    public static function get(string $key, mixed $default = null): mixed
+    public static function get(?string $id, string $key, mixed $default = null): mixed
     {
-        $data = self::getAll();
-        return $data[$key] ?? $default;
+        return self::getAll($id)[$key] ?? $default;
     }
 
     /**
      * @return array<string, mixed>
      */
-    public static function getAll(): array
+    public static function getAll(?string $id): array
     {
-        $file = self::getFilePath();
-        $content = @file_get_contents($file);
-        if ($content === false) {
-            return [];
-        }
-        $json = json_decode($content, true);
-        if (!is_array($json)) {
-            return [];
-        }
-        /** @var array<string, mixed> $json */
-        return $json;
+        $file = self::path($id);
+        $content = $file === null ? false : @file_get_contents($file);
+        $json = $content === false ? null : json_decode($content, true);
+
+        /** @var array<string, mixed> */
+        return is_array($json) ? $json : [];
     }
 
-    public static function delete(): void
+    public static function delete(?string $id): void
     {
-        $file = self::getFilePath();
-        if (file_exists($file)) {
+        $file = self::path($id);
+        if ($file !== null && file_exists($file)) {
             unlink($file);
         }
     }

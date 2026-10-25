@@ -15,7 +15,18 @@ class ArtisanController
         $command = (string) $request->string('command');
         $parameters = (array) $request->input('parameters');
 
-        $exitCode = Artisan::call($command, $parameters);
+        // Commands expect the CLI's working directory, not the web server's public/:
+        // `migrate:fresh` on SQLite empties a relative DB_DATABASE path.
+        $previous = getcwd();
+        chdir(base_path());
+
+        try {
+            $exitCode = Artisan::call($command, $parameters);
+        } finally {
+            if ($previous !== false) {
+                chdir($previous);
+            }
+        }
 
         return Response::json([
             'code' => $exitCode,

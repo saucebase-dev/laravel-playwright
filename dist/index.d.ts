@@ -1,4 +1,7 @@
 import { APIRequestContext } from '@playwright/test';
+export { isAppUrl, laravelServer, type LaravelServerOptions } from './config.ts';
+/** Ties a request to the test that made it, so its state applies to it alone. */
+export declare const TEST_HEADER = "X-Playwright-Test";
 export interface LaravelOptions {
     /**
      * The base URL to the endpoints
@@ -9,16 +12,24 @@ export interface LaravelOptions {
      * Optional secret token sent as X-Playwright-Secret header
      */
     laravelSecret: string | undefined;
+    /**
+     * Which browser requests go to the app and carry the test header.
+     * @default the base URL's host and its subdomains
+     */
+    laravelIsAppUrl: ((url: URL) => boolean) | undefined;
 }
 interface LaravelFixtures {
     laravel: Laravel;
+    /** Unique per test; the server keeps each test's config, time and boot functions apart by it. */
+    laravelTestId: string;
 }
 export declare const test: import('playwright/test').TestType<import('playwright/test').PlaywrightTestArgs & import('playwright/test').PlaywrightTestOptions & LaravelFixtures & LaravelOptions, import('playwright/test').PlaywrightWorkerArgs & import('playwright/test').PlaywrightWorkerOptions>;
 export declare class Laravel {
     private baseUrl;
     private request;
     private secret;
-    constructor(baseUrl: string, request: APIRequestContext, secret?: string | undefined);
+    readonly testId: string;
+    constructor(baseUrl: string, request: APIRequestContext, secret?: string | undefined, testId?: string);
     call<T = unknown>(endpoint: string, data?: object): Promise<T>;
     artisan(command: string, parameters?: string[]): Promise<{
         code: number;
@@ -49,4 +60,3 @@ export declare class Laravel {
     registerBootFunction(func: string): Promise<unknown>;
     tearDown(): Promise<unknown>;
 }
-export {};

@@ -21,6 +21,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # JS/TS build (outputs to dist/)
 npm run build   # tsc type-check + vite build
+npm test        # node --test on src/playwright/tests/*.test.ts (pure helpers)
 ```
 
 ## Architecture
@@ -29,16 +30,16 @@ This is a dual-language package: a **PHP Laravel package** (`src/`) paired with 
 
 ### How it works
 
-The PHP side registers HTTP routes (under a configurable prefix, default `playwright/`) that are only active in configured environments (`local`, `testing`). The TypeScript `Laravel` class calls these routes via Playwright's `APIRequestContext`, then `tearDown()` is called automatically after each test via a Playwright fixture.
+The PHP side registers HTTP routes (under a configurable prefix, default `playwright/`) that are only active in configured environments (`e2e`, `testing`; never `local`, the developer's own server). The TypeScript `Laravel` class calls these routes via Playwright's `APIRequestContext`, then `tearDown()` is called automatically after each test via a Playwright fixture.
 
-**Dynamic config** (`DynamicConfig`) persists test state across multiple requests within a single test by writing to `storage/laravel-playwright-config.json`. This file is loaded on every request (in `ServiceProvider::boot`) and deleted on `tearDown`. It's used for time travel and boot functions.
+**Dynamic config** (`DynamicConfig`) persists test state across multiple requests within a single test, per test: the fixture sends a test id in the `X-Playwright-Test` header (on `laravel` calls, and on browser requests to the app via `context.route`). State lives in `storage/framework/playwright/<id>.json`, is loaded in `ServiceProvider::boot` only for requests carrying that id, and is deleted by that test's `tearDown`. It's used for config, time travel and boot functions.
 
 ### PHP package structure
 
 - **`src/ServiceProvider.php`** — registers/merges `config/laravel-playwright.php`, loads routes and `DynamicConfig` only in allowed environments
 - **`src/Http/Controllers/`** — one invokable controller per endpoint: `ArtisanController`, `TruncateController`, `FactoryController`, `QueryController`, `SelectController`, `FunctionController`, `DynamicConfigController`, `TravelController`, `RegisterBootFunctionController`, `TearDownController`
 - **`src/Services/Config.php`** — reads `laravel-playwright.*` config keys; `prefix()`, `envs()`, `secret()`
-- **`src/Services/DynamicConfig.php`** — file-backed per-test state store; loaded at boot, deleted at tearDown
+- **`src/Services/DynamicConfig.php`** — file-backed per-test state store keyed by the `X-Playwright-Test` id (validated as a safe file name); loaded at boot, deleted at tearDown
 - **`src/Services/Truncate.php`** — truncates DB tables across connections; includes SQLite fallback (catches `QueryException` when `sqlite_sequence` doesn't exist)
 - **`src/Http/Middleware/VerifyPlaywrightSecret.php`** — checks `X-Playwright-Secret` header or `_secret` body field against `PLAYWRIGHT_SECRET` env; no-op when secret is not configured
 
@@ -46,13 +47,17 @@ The PHP side registers HTTP routes (under a configurable prefix, default `playwr
 
 ```php
 'prefix'       => env('PLAYWRIGHT_PREFIX', 'playwright'),
-'environments' => ['local', 'testing'],
+'environments' => ['e2e', 'testing'],
 'secret'       => env('PLAYWRIGHT_SECRET', null),
 ```
 
 ### TypeScript client (`src/playwright/src/index.ts`)
 
-Exports `test` (a Playwright fixture extension) and `Laravel` class. The fixture injects a `laravel` object and auto-calls `tearDown()`. The `LaravelOptions` interface adds `laravelBaseUrl` and `laravelSecret` as Playwright config options. The secret, if set, is forwarded as the `X-Playwright-Secret` header on every request.
+Exports `test` (a Playwright fixture extension), `Laravel` class, and from `config.ts` the pure helpers `laravelServer()` (a `webServer` entry: migrate, then `php artisan serve --env=e2e --no-reload` on `.env.<env>`'s `APP_URL` port, waiting on `APP_URL`, with its own `APP_CONFIG_CACHE`/`APP_ROUTES_CACHE`/`APP_EVENTS_CACHE` under `bootstrap/cache/<env>/` so a developer's cached config can't point it at their database; refuses without `.env.<env>`, without an http `APP_URL`, or with another `APP_ENV` in the process) and `isAppUrl()` (base host and its subdomains). The fixture injects a `laravel` object and auto-calls `tearDown()`. The `LaravelOptions` interface adds `laravelBaseUrl` and `laravelSecret` as Playwright config options. The secret, if set, is forwarded as the `X-Playwright-Secret` header on every request.
+
+### Laravel Boost
+
+`resources/boost/guidelines/core.blade.php` (always loaded in the consuming app, keep it to the must-know rules) and `resources/boost/skills/laravel-playwright-development/SKILL.md` (the detail). Keep both in step with the README when behaviour changes.
 
 ### Tests
 
