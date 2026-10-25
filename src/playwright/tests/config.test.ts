@@ -58,7 +58,7 @@ test('laravelServer takes its options', () => {
 });
 
 test('laravelServer refuses to start without the env file, which would fall back to .env', () => {
-    assert.throws(() => laravelServer({ cwd: appWith({ '.env': 'APP_URL=http://localhost\n' }) }), /\.env\.e2e/);
+    assert.throws(() => laravelServer({ cwd: appWith({ '.env': 'APP_URL=http://localhost\n' }) }), /php artisan playwright:env/);
 });
 
 test('laravelServer needs an http APP_URL, which is all artisan serve speaks', () => {

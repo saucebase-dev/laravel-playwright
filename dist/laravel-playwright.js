@@ -1,16 +1,16 @@
 import { test as h } from "@playwright/test";
-import { existsSync as p, readFileSync as u } from "node:fs";
-import { join as v } from "node:path";
+import { existsSync as p, readFileSync as v } from "node:fs";
+import { join as u } from "node:path";
 import { parseEnv as w } from "node:util";
 function m(s = {}) {
-  const { env: t = "e2e", host: e = "127.0.0.1", workers: a = 4, cwd: r = process.cwd(), migrate: n = !0 } = s, o = v(r, `.env.${t}`);
+  const { env: t = "e2e", host: e = "127.0.0.1", workers: a = 4, cwd: r = process.cwd(), migrate: n = !0 } = s, o = u(r, `.env.${t}`);
   if (!p(o))
-    throw new Error(`laravelServer: create .env.${t} in ${r}, with its own database, before running the suite.`);
+    throw new Error(`laravelServer: .env.${t} is missing in ${r}. Create it with \`php artisan playwright:env${t === "e2e" ? "" : ` ${t}`}\` (a copy of .env with its own server and database).`);
   if (process.env.APP_ENV !== void 0 && process.env.APP_ENV !== t)
     throw new Error(
       `laravelServer: the Playwright process has APP_ENV=${process.env.APP_ENV}, so another env file was loaded and its values would override .env.${t}. Load .env.${t} instead (dotenv config({ path: '.env.${t}' })) or none.`
     );
-  const i = w(u(o, "utf8")).APP_URL;
+  const i = w(v(o, "utf8")).APP_URL;
   if (!i)
     throw new Error(`laravelServer: set APP_URL in .env.${t}, e.g. http://localhost:8100.`);
   const c = new URL(i);

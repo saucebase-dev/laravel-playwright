@@ -2,6 +2,7 @@
 
 namespace Saucebase\LaravelPlaywright;
 
+use Saucebase\LaravelPlaywright\Console\EnvCommand;
 use Saucebase\LaravelPlaywright\Services\Config;
 use Saucebase\LaravelPlaywright\Services\DynamicConfig;
 use Illuminate\Support\Facades\App;
@@ -20,6 +21,11 @@ class ServiceProvider extends BaseServiceProvider
         $this->publishes([
             __DIR__ . '/../config/laravel-playwright.php' => config_path('laravel-playwright.php'),
         ], 'laravel-playwright-config');
+
+        // Writing .env.e2e happens from the developer's own environment, so in any.
+        if ($this->app->runningInConsole()) {
+            $this->commands([EnvCommand::class]);
+        }
 
         if (App::environment(...Config::envs())) {
             $this->loadRoutesFrom(__DIR__ . '/routes/e2e.php');

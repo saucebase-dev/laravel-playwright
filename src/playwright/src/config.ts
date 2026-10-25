@@ -33,7 +33,7 @@ export function laravelServer(options: LaravelServerOptions = {}) {
     // Without it Laravel falls back to `.env`, and the suite would wipe the
     // developer's own database.
     if (!existsSync(file)) {
-        throw new Error(`laravelServer: create .env.${env} in ${cwd}, with its own database, before running the suite.`);
+        throw new Error(`laravelServer: .env.${env} is missing in ${cwd}. Create it with \`php artisan playwright:env${env === 'e2e' ? '' : ` ${env}`}\` (a copy of .env with its own server and database).`);
     }
 
     // The server inherits this process's environment, and real environment variables

@@ -14,7 +14,7 @@ A Laravel package plus a Playwright fixture. The package adds endpoints under `/
 
 The suite runs on its own server and database, never the developer's. Three pieces:
 
-1. **`.env.e2e`**, a copy of `.env` with its own `APP_ENV=e2e`, `APP_URL` (http, own port, e.g. `http://localhost:8100`) and database (e.g. `DB_CONNECTION=sqlite`, `DB_DATABASE=database/e2e.sqlite`). Keep it out of git like `.env`.
+1. **`.env.e2e`**, written by `php artisan playwright:env` (`--force` to rewrite it, `--url` for another port): a full copy of `.env` with `APP_ENV=e2e`, `APP_URL=http://localhost:8100`, SQLite `database/e2e.sqlite` and service-free drivers. Laravel loads one env file only, so it stays a full copy. Keep it out of git like `.env`.
 2. **`webServer: laravelServer()`** in `playwright.config.ts`. It runs `migrate --force`, then `php artisan serve --env=e2e` on `APP_URL`'s port, waits on `APP_URL`, and gives the server its own config/route/event caches under `bootstrap/cache/e2e/`.
 3. **`use.baseURL`** set to the same `APP_URL`.
 
