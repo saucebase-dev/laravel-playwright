@@ -114,6 +114,8 @@ MAIL_MAILER=log
 REDIS_PREFIX=<your prefix>e2e_
 ```
 
+`DB_URL` carries the SQLite settings that let parallel workers wait for each other. `transaction_mode=IMMEDIATE` needs PHP 8.4 or later; older versions ignore it, so read-then-write transactions can still hit `database is locked`. `busy_timeout` applies on every version.
+
 Options: `php artisan playwright:env <environment> --url=http://localhost:9000 --force`. Edit the file afterwards for anything else the suite needs. Keep `.env.e2e` out of git like `.env`, and in CI, run the command after creating `.env`.
 
 **2. Let Playwright start the server:**
