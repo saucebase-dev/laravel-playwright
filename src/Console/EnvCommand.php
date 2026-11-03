@@ -70,8 +70,10 @@ class EnvCommand extends Command
             'APP_ENV' => $environment,
             'APP_URL' => $url,
             'DB_CONNECTION' => 'sqlite',
-            // A DB_URL wins over DB_DATABASE, and would keep the app's database.
-            'DB_URL' => '',
+            // A DB_URL wins over DB_DATABASE, so this one replaces the app's. Its options reach a
+            // config that hardcodes them: parallel workers share this file, and a transaction that
+            // reads then writes fails at once if another is writing, unless it locks up front.
+            'DB_URL' => "\"sqlite:///database/{$environment}.sqlite?transaction_mode=IMMEDIATE&busy_timeout=10000\"",
             'DB_DATABASE' => "database/{$environment}.sqlite",
             'SESSION_DRIVER' => 'file',
             'CACHE_STORE' => 'file',
