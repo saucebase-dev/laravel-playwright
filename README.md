@@ -105,7 +105,7 @@ This writes a copy of your `.env` with its own server and database. Laravel load
 APP_ENV=e2e
 APP_URL=http://localhost:8100
 DB_CONNECTION=sqlite
-DB_URL=
+DB_URL="sqlite:///database/e2e.sqlite?transaction_mode=IMMEDIATE&busy_timeout=10000"
 DB_DATABASE=database/e2e.sqlite
 SESSION_DRIVER=file
 CACHE_STORE=file
