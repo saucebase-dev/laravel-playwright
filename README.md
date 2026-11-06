@@ -116,7 +116,25 @@ REDIS_PREFIX=<your prefix>e2e_
 
 `DB_URL` carries the SQLite settings that let parallel workers wait for each other. `transaction_mode=IMMEDIATE` needs PHP 8.4 or later; older versions ignore it, so read-then-write transactions can still hit `database is locked`. `busy_timeout` applies on every version.
 
-Options: `php artisan playwright:env <environment> --url=http://localhost:9000 --force`. Edit the file afterwards for anything else the suite needs. Keep `.env.e2e` out of git like `.env`, and in CI, run the command after creating `.env`.
+To change a value, set it in `.env` with an `E2E_` prefix. It wins over the defaults above and is copied as written, with any `${VARIABLE}` resolved. The prefix follows the environment: `playwright:env browser` reads `BROWSER_*`.
+
+```dotenv
+E2E_MAIL_MAILER=smtp
+
+# A real database, e.g. MySQL in Docker. Create it first.
+E2E_DB_CONNECTION=mysql
+E2E_DB_HOST=127.0.0.1
+E2E_DB_PORT=3307
+E2E_DB_DATABASE=${APP_SLUG}_e2e
+E2E_DB_USERNAME=root
+E2E_DB_PASSWORD=password
+```
+
+**The suite wipes this database**, so the command refuses one that is also the app's. On SQLite, `E2E_DB_DATABASE` keeps the lock settings. `E2E_DB_URL` is used exactly as written, so include them yourself or parallel workers can hit `database is locked`.
+
+If the file exists, the command asks whether to back it up and replace it, replace it, or keep it. `--backup` and `--force` answer without asking, and an unattended run without either keeps the file. The backup is `.env.e2e.backup`, replaced by the next one. It holds your secrets, so keep it out of git too.
+
+Options: `php artisan playwright:env <environment> --url=http://localhost:9000`. Edit the file afterwards for anything else the suite needs. Keep `.env.e2e` out of git like `.env`, and in CI, run the command after creating `.env`.
 
 **2. Let Playwright start the server:**
 
