@@ -1,4 +1,6 @@
-# Laravel Playwright
+# Laravel and Playwright E2E Testing
+
+A **Laravel and Playwright library** for end-to-end (E2E) browser testing.
 
 Use Laravel factories, Artisan commands, database queries, configuration and time travel from your [Playwright](https://playwright.dev/) tests.
 
