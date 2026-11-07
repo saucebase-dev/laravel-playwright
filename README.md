@@ -1,3 +1,7 @@
+<img src="./art/banner.jpg" />
+
+
+
 # Laravel and Playwright E2E Testing
 
 A **Laravel and Playwright library** for end-to-end (E2E) browser testing.
@@ -5,6 +9,8 @@ A **Laravel and Playwright library** for end-to-end (E2E) browser testing.
 Use Laravel factories, Artisan commands, database queries, configuration and time travel from your [Playwright](https://playwright.dev/) tests.
 
 This package has two parts: a Laravel package that exposes testing endpoints, and a TypeScript fixture that calls them. Run your tests against a dedicated server and database; the fixture cleans up each test's configuration, clock and boot functions automatically.
+
+
 
 ## Contents
 
