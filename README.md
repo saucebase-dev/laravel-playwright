@@ -1,99 +1,366 @@
 # Laravel Playwright
 
+Use Laravel factories, Artisan commands, database queries, configuration and time travel from your [Playwright](https://playwright.dev/) tests.
 
-This repository contains a Laravel and a Playwright library to help you write E2E tests for your Laravel application using [Playwright](https://playwright.dev/). It adds a set of endpoints to your Laravel application to allow Playwright to interact with it. You can do the following from your Playwright tests:
+This package has two parts: a Laravel package that exposes testing endpoints, and a TypeScript fixture that calls them. Run your tests against a dedicated server and database; the fixture cleans up each test's configuration, clock and boot functions automatically.
 
-- Run artisan commands
-- Create models using factories
-- Run database queries
-- Run PHP functions
-- Update Laravel config while a test is running (until the test ends and calls `tearDown`).
-- Register a boot function to run on every subsequent Laravel request in the test — useful for swapping service bindings.
-- Traveling to a specific time in the application during the test
+## Contents
 
-## 📦 Installation
+- [Requirements](#requirements)
+- [Quick start](#quick-start)
+- [API reference](#api-reference)
+- [Reusable fixtures and PHP helpers](#reusable-fixtures-and-php-helpers)
+- [Database setup and parallel tests](#database-setup-and-parallel-tests)
+- [Configuration, time and boot functions](#configuration-time-and-boot-functions)
+- [Environment and server configuration](#environment-and-server-configuration)
+- [Security and custom endpoints](#security-and-custom-endpoints)
+- [CI](#ci)
+- [Troubleshooting](#troubleshooting)
+- [Laravel Boost](#laravel-boost)
+- [Upgrading from v1](#upgrading-from-v1)
 
-On Laravel side, install the package via composer:
+## Requirements
+
+- PHP 8.3+
+- Laravel 12 or 13
+- Node.js 22+
+- Playwright ^1.58.2
+
+## Quick start
+
+Run these commands from your existing Laravel application's root.
+
+### 1. Install both packages and a browser
 
 ```bash
 composer require --dev saucebase/laravel-playwright
+npm install --save-dev @playwright/test @saucebase/laravel-playwright
+npx playwright install chromium
 ```
 
-On Playwright side, install the package via npm:
-
-```bash
-npm install @saucebase/laravel-playwright --save-dev
-```
-
-## ⚙️ Laravel Config
-
-Publish the config file:
+Laravel discovers the provider automatically. To publish the configuration:
 
 ```bash
 php artisan vendor:publish --tag=laravel-playwright-config
 ```
 
-This creates `config/laravel-playwright.php` with the following options:
+This creates `config/laravel-playwright.php`.
 
-```php
-return [
-    /**
-     * The prefix for the testing endpoints used to interact with Playwright.
-     * Make sure to update `use.laravelBaseUrl` in playwright.config.ts if you change this.
-     */
-    'prefix' => env('PLAYWRIGHT_PREFIX', 'playwright'),
+### 2. Create the test environment
 
-    /**
-     * The environments in which the testing endpoints are enabled.
-     * CAUTION: the endpoints run arbitrary PHP and SQL. Never enable them in
-     * production, nor in `local`, the environment your own dev server runs in.
-     */
-    'environments' => ['e2e', 'testing'],
-
-    /**
-     * Optional secret token to authenticate Playwright requests.
-     * Set PLAYWRIGHT_SECRET in your .env and laravelSecret in playwright.config.ts.
-     */
-    'secret' => env('PLAYWRIGHT_SECRET', null),
-];
+```bash
+php artisan playwright:env
 ```
 
-## 💡 Example
+This creates `.env.e2e` from `.env`, with a separate SQLite database (requires PHP’s SQLite extension), `APP_ENV=e2e`, and `APP_URL=http://localhost:8100`.
 
-If you need a good and more complex example of a repository using this package, look at https://github.com/saucebase-dev/saucebase
+> [!WARNING]
+> `.env.e2e` contains your app's secrets. Add these entries to `.gitignore`:
+>
+> ```gitignore
+> .env.e2e
+> .env.e2e.backup
+> /test-results/
+> /playwright-report/
+> ```
 
-## 🎭 Playwright Config
+Use a dedicated test database, never your development or production database.
 
-Set `use.laravelBaseUrl` in your `playwright.config.ts` to the base URL of your testing endpoints (your application URL + the `prefix` from Laravel config).
+### 3. Configure Playwright
 
-```ts
-export default defineConfig({
-    /** ...other config */
-    use: {
-        laravelBaseUrl: 'http://localhost/playwright',
-        laravelSecret: process.env.PLAYWRIGHT_SECRET,  // optional
-    },
-});
-```
-
-If you use TypeScript, include the `LaravelOptions` type in the `defineConfig` function.
+Create or update `playwright.config.ts` in the app root:
 
 ```ts
-import type { LaravelOptions } from '@saucebase/laravel-playwright';
+import { defineConfig } from '@playwright/test';
+import { laravelServer, type LaravelOptions } from '@saucebase/laravel-playwright';
 
 export default defineConfig<LaravelOptions>({
+    testDir: './tests/e2e',
     use: {
-        laravelBaseUrl: 'http://localhost/playwright',
-        laravelSecret: process.env.PLAYWRIGHT_SECRET,  // optional
+        baseURL: 'http://localhost:8100',
+    },
+    webServer: laravelServer(),
+});
+```
+
+`laravelServer()` migrates the E2E database, starts Laravel in the `e2e` environment, and waits for it to respond. Playwright manages the server's lifecycle. You do not need to start Herd, Docker or a separate Artisan server for this suite.
+
+Keep `baseURL` equal to `APP_URL` in `.env.e2e`. The client automatically uses `${baseURL}/playwright` for its testing endpoints.
+
+### 4. Write your first test
+
+Create `tests/e2e/example.spec.ts`:
+
+```ts
+import { expect } from '@playwright/test';
+import { test } from '@saucebase/laravel-playwright';
+
+test('opens the app and creates a user', async ({ page, laravel }) => {
+    const user = await laravel.factory('User', {
+        email: `e2e-${crypto.randomUUID()}@example.com`,
+    });
+
+    const rows = await laravel.select(
+        'SELECT id FROM users WHERE email = :email',
+        { email: user.email },
+    );
+
+    expect(rows).toEqual([{ id: user.id }]);
+
+    const response = await page.goto('/');
+    expect(response?.status()).toBe(200);
+});
+```
+
+Import `test` from this package to get the `laravel` fixture; import `expect` from Playwright. Use your app's factory and page URL in the example.
+
+### 5. Run it
+
+```bash
+npx playwright test
+```
+
+You should see one passing test. For interactive debugging, use `npx playwright test --ui`.
+
+If your app requires compiled frontend assets, run `npm run build` before testing.
+
+## API reference
+
+All methods below are available on the `laravel` fixture and return promises.
+
+| Method | Purpose | Result |
+| --- | --- | --- |
+| `artisan(command, parameters?)` | Run an Artisan command | `{ code, output }` |
+| `factory(model, attributes?, count?)` | Create models using their factories | One object, or an array when `count` is provided |
+| `select(sql, bindings?, options?)` | Read database rows | Array of objects |
+| `query(sql, bindings?, options?)` | Execute a database statement | `{ success }` |
+| `truncate(connections?)` | Truncate tables on the selected connections | Await completion |
+| `callFunction<T>(callable, arguments?)` | Call PHP once and decode its JSON result | `T` |
+| `config(key, value)` | Change configuration for this test | Await completion |
+| `travel(datetime)` | Set Laravel's clock for this test | Await completion |
+| `registerBootFunction(callable)` | Run PHP at boot on subsequent requests in this test | Await completion |
+| `tearDown()` | Remove this test's config, clock and boot functions | Called automatically by the fixture |
+
+### Artisan
+
+Pass options in the command string:
+
+```ts
+const result = await laravel.artisan('db:seed --class=DatabaseSeeder');
+expect(result.code).toBe(0);
+```
+
+Commands run from your application's root. Inspect `code` to check whether the command succeeded. Do not pass CLI tokens such as `['--class', 'DatabaseSeeder']` as the second argument: Laravel expects named arguments and options, not a token list.
+
+### Factories
+
+```ts
+const user = await laravel.factory('User', {
+    email: `e2e-${crypto.randomUUID()}@example.com`,
+});
+const users = await laravel.factory('User', {}, 3);
+const otherUser = await laravel.factory(String.raw`App\Models\User`);
+```
+
+A short name resolves to `App\Models\<Name>`. For a module or package model, pass its full class name. Models must expose Laravel's `factory()` method. Use a PHP helper for factory states or relationships.
+
+### Queries
+
+```ts
+const users = await laravel.select(
+    'SELECT id, email FROM users WHERE email = :email',
+    { email: user.email },
+);
+
+await laravel.query('UPDATE users SET name = ? WHERE id = ?', ['Updated', user.id]);
+```
+
+Both methods accept a third argument `{ connection: 'connection_name' }`. `query()` also accepts `{ unprepared: true }` for raw statements; it cannot be combined with bindings. Use bindings for values.
+
+### PHP functions
+
+```ts
+const appName = await laravel.callFunction<string>('config', ['app.name']);
+const credentials = await laravel.callFunction<{ email: string; password: string }>(
+    String.raw`Tests\Support\E2eUsers::create`,
+);
+```
+
+Pass positional arguments as an array, or named arguments as an object. The callable must exist and be autoloadable in the app. Results must be JSON-serializable; TypeScript's generic describes the expected shape, it does not validate the response.
+
+## Reusable fixtures and PHP helpers
+
+As a suite grows, give it one fixture entry point. Keep application-specific setup in PHP helpers instead of repeating SQL or model details in TypeScript.
+
+For example, create `tests/Support/E2eUsers.php`. A standard Laravel app already autoloads the `Tests\` namespace for development:
+
+```php
+<?php
+
+namespace Tests\Support;
+
+use App\Models\User;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
+
+class E2eUsers
+{
+    /** @return array{email: string, password: string} */
+    public static function create(): array
+    {
+        $password = Str::random(24);
+        $user = User::factory()->create([
+            'email' => 'e2e-'.Str::uuid().'@example.com',
+            'password' => Hash::make($password),
+        ]);
+
+        return ['email' => $user->email, 'password' => $password];
+    }
+}
+```
+
+Create `tests/e2e/fixtures.ts`:
+
+```ts
+import { test as base } from '@saucebase/laravel-playwright';
+export { expect } from '@playwright/test';
+
+type Credentials = { email: string; password: string };
+
+export const test = base.extend<{ credentials: Credentials }>({
+    credentials: async ({ laravel }, use) => {
+        const credentials = await laravel.callFunction<Credentials>(
+            String.raw`Tests\Support\E2eUsers::create`,
+        );
+        await use(credentials);
     },
 });
 ```
 
-## 🏝️ A dedicated environment
+Then import your fixture in specs:
 
-Run the suite on its own server and database, so it never touches your dev app or its data. This works the same however you serve the app day to day: Herd, Valet, Sail, Docker or `artisan serve`.
+```ts
+import { test, expect } from './fixtures';
 
-**1. Create `.env.e2e`:**
+test('prepares an account', async ({ credentials, laravel }) => {
+    const users = await laravel.select(
+        'SELECT email FROM users WHERE email = :email',
+        { email: credentials.email },
+    );
+    expect(users).toEqual([{ email: credentials.email }]);
+});
+```
+
+Each test gets a different user. Build an app-specific `loginAs` fixture on top once your app has an authentication flow; a plain Laravel installation has no login page.
+
+You can also fail tests on uncaught browser exceptions with an automatic fixture:
+
+```ts
+import { expect } from '@playwright/test';
+import { test as base } from './fixtures';
+
+export const test = base.extend<{ failOnPageError: void }>({
+    failOnPageError: [async ({ page }, use) => {
+        const errors: string[] = [];
+        page.on('pageerror', error => errors.push(error.message));
+        await use();
+        expect(errors, 'uncaught browser errors').toEqual([]);
+    }, { auto: true }],
+});
+```
+
+These patterns are adapted from [Saucebase Core's fixtures](https://github.com/saucebase-dev/core/blob/main/stubs/app/tests/e2e/fixtures/index.ts). See [Saucebase](https://github.com/saucebase-dev/saucebase) for a larger application example. Roles, billing accounts and module helpers in that app are application features, not requirements of this package.
+
+## Database setup and parallel tests
+
+`laravelServer()` runs migrations; it does **not** reset your database on every run. Factory-created rows survive test teardown. Configuration, time and boot functions are isolated per test, but database rows are shared.
+
+For a clean database at the start of each suite, create `tests/e2e/database.setup.ts`:
+
+```ts
+import { expect } from '@playwright/test';
+import { test as setup } from '@saucebase/laravel-playwright';
+
+setup('reset the E2E database', async ({ laravel }) => {
+    const result = await laravel.artisan('migrate:fresh --seed');
+    expect(result.code).toBe(0);
+});
+```
+
+Add projects to your existing `defineConfig` call:
+
+```ts
+projects: [
+    { name: 'setup', testMatch: /.*\.setup\.ts/ },
+    { name: 'chromium', testMatch: /.*\.spec\.ts/, dependencies: ['setup'] },
+],
+```
+
+**This deletes all data in the E2E database.** Never run `migrate:fresh` or `truncate()` inside tests that execute alongside other tests. Reset once before the workers start.
+
+Use unique emails and identifiers for mutable records. Shared fixed-email accounts should be seeded once in setup and only read by tests. Per-process Faker uniqueness does not guarantee uniqueness across separate HTTP requests.
+
+`await laravel.truncate()` truncates the default connection; pass an array of connection names to select others.
+
+## Configuration, time and boot functions
+
+```ts
+import { test } from '@saucebase/laravel-playwright';
+import { expect } from '@playwright/test';
+
+test('changes config and time', async ({ laravel }) => {
+    await laravel.config('app.timezone', 'Europe/Dublin');
+    await laravel.travel('2026-01-01 12:00:00');
+    expect(await laravel.callFunction<string>('config', ['app.timezone']))
+        .toBe('Europe/Dublin');
+});
+```
+
+Changes apply to subsequent requests carrying this test's ID, until the fixture calls `tearDown()`. Time travel changes Laravel's clock, not the browser's JavaScript clock.
+
+### Boot functions
+
+`callFunction()` runs once. `registerBootFunction()` registers a callable that runs at the start of subsequent Laravel requests in the test. Use it when browser requests need a service binding or fake installed on every request.
+
+For example, create `tests/Support/E2eBoot.php`:
+
+```php
+<?php
+
+namespace Tests\Support;
+
+use Illuminate\Support\Facades\Mail;
+
+class E2eBoot
+{
+    public static function fakeMail(): void
+    {
+        Mail::fake();
+    }
+}
+```
+
+Register it before navigating to the app:
+
+```ts
+await laravel.registerBootFunction(String.raw`Tests\Support\E2eBoot::fakeMail`);
+await page.goto('/');
+```
+
+The fake is recreated for each request. Its recorded messages do not persist across requests; use this to prevent delivery, not to assert mail from an earlier request. The same pattern can bind your application's external-service interface to a fake implementation.
+
+### Request isolation
+
+The fixture creates a test ID and sends `X-Playwright-Test` on its Laravel calls and browser requests to the app. State is stored in `storage/framework/playwright/<test-id>.json` and removed automatically at teardown.
+
+- Parallel tests do not see or delete each other's config, time or boot functions.
+- The browser header matches the `baseURL` host and its subdomains; third-party requests are untouched. Override this with `use.laravelIsAppUrl: (url: URL) => boolean`.
+- Custom routes intercepting app requests must call `route.fallback()`, not `route.continue()`, so the fixture can add the header.
+- Contexts you create with `browser.newContext()` do not receive the header automatically.
+- Requests without the ID, including external queue workers, do not see this state. A custom endpoint client must send the header itself.
+
+## Environment and server configuration
+
 
 ```bash
 php artisan playwright:env
@@ -136,7 +403,7 @@ If the file exists, the command asks whether to back it up and replace it, repla
 
 Options: `php artisan playwright:env <environment> --url=http://localhost:9000`. Edit the file afterwards for anything else the suite needs. Keep `.env.e2e` out of git like `.env`, and in CI, run the command after creating `.env`.
 
-**2. Let Playwright start the server:**
+### Server options
 
 ```ts
 import { defineConfig } from '@playwright/test';
@@ -154,223 +421,97 @@ export default defineConfig<LaravelOptions>({
 - `APP_URL` is missing or not `http:`. `artisan serve` has no TLS.
 - The Playwright process already has another `APP_ENV`. The server inherits the process's environment, and real environment variables override any env file, so `import 'dotenv/config'` (which loads `.env`) would give the server your dev database. To read values from `.env.e2e` in the config, use `config({ path: '.env.e2e' })` from dotenv.
 
-**Subdomains and multi-tenancy.** Chromium resolves every `*.localhost` to your machine, so `http://acme.localhost:8100` reaches the same server with no DNS or hosts-file setup. To use a real wildcard host instead (Herd or Valet `*.app.test`), skip `laravelServer()` and point `baseURL` at that host, served with `APP_ENV=e2e`.
+### Subdomains and multi-tenancy
+ Chromium resolves every `*.localhost` to your machine, so `http://acme.localhost:8100` reaches the same server with no DNS or hosts-file setup. To use a real wildcard host instead (Herd or Valet `*.app.test`), skip `laravelServer()` and point `baseURL` at that host, served with `APP_ENV=e2e`.
 
-## 🔒 Security
+## Security and custom endpoints
 
-The package supports an optional shared secret to prevent unauthorized access to the testing endpoints.
+The endpoints can execute PHP, SQL and Artisan commands. They are enabled only in `e2e` and `testing` by default. Never enable them in production or on your regular `local` development server. Install the Composer package as a development dependency.
 
-**Laravel `.env`:**
+To customize the defaults:
+
+```bash
+php artisan vendor:publish --tag=laravel-playwright-config
 ```
-PLAYWRIGHT_SECRET=some-secret
+
+The published `config/laravel-playwright.php` contains:
+
+```php
+return [
+    'prefix' => env('PLAYWRIGHT_PREFIX', 'playwright'),
+    'environments' => ['e2e', 'testing'],
+    'secret' => env('PLAYWRIGHT_SECRET', null),
+];
 ```
 
-**`playwright.config.ts`:**
+For a custom prefix, set `use.laravelBaseUrl` to the complete endpoint base URL, for example `http://localhost:8100/test-api`.
+
+### Optional shared secret
+
+Set `PLAYWRIGHT_SECRET` in `.env.e2e` and pass the same value as `use.laravelSecret`. The client sends `X-Playwright-Secret`; missing or incorrect secrets receive HTTP 401. Without a configured secret, no secret check is performed.
+
+Node does not automatically load Laravel's env file. You can read the value without loading the entire file into the process environment:
+
 ```ts
+import { readFileSync } from 'node:fs';
+import { parseEnv } from 'node:util';
+
+const e2e = parseEnv(readFileSync('.env.e2e', 'utf8'));
+
+// Inside defineConfig:
 use: {
-    laravelSecret: process.env.PLAYWRIGHT_SECRET,
+    baseURL: e2e.APP_URL,
+    laravelSecret: e2e.PLAYWRIGHT_SECRET,
 },
 ```
 
-When configured, the TypeScript client sends the secret as an `X-Playwright-Secret` header on every request. Laravel returns `401 Unauthorized` if the header is missing or doesn't match. When `PLAYWRIGHT_SECRET` is not set, all requests pass through (backwards compatible).
+Keep the test server bound to loopback when possible. A secret does not make these endpoints appropriate for a production deployment.
 
-## 🧪 Setting up tests
+## CI
 
-In your Playwright tests, swap the `test` import from `@playwright/test` to `@saucebase/laravel-playwright`.
+After checking out the app and installing a compatible PHP and Node version, a typical Linux CI job runs:
 
-```diff
-- import { test } from '@playwright/test';
-+ import { test } from '@saucebase/laravel-playwright';
-
-test('example', async ({ laravel }) => {
-    await laravel.artisan('migrate:fresh');
-});
+```bash
+composer install --no-interaction --prefer-dist
+npm ci
+cp .env.example .env
+php artisan key:generate --no-interaction
+php artisan playwright:env --no-interaction
+npm run build
+npx playwright install --with-deps chromium
+CI=true npx playwright test
 ```
 
-> **Note**: In practice, it is not recommended to import from `@saucebase/laravel-playwright` directly in every test file if you have many. Instead, create your own [test fixture](https://playwright.dev/docs/test-fixtures) extending `test` from `@saucebase/laravel-playwright` and import that fixture in your tests.
+Keep development dependencies installed. Set any application-specific E2E overrides before generating `.env.e2e`. The example assumes the standard Laravel `.env.example` and SQLite; apps requiring external services need their own CI configuration. `CI=true` prevents `laravelServer()` from reusing an existing server.
 
-## 🚀 Basic Usage
+## Troubleshooting
 
-```ts
-import { test } from '@saucebase/laravel-playwright';
+| Symptom | Check |
+| --- | --- |
+| Browser executable does not exist | Run `npx playwright install chromium` after installing or upgrading Playwright. |
+| 404 from `/playwright/*` | Use the E2E server, not your regular local server. Check the configured prefix and environment. |
+| 401 from a testing endpoint | Pass the same secret to Laravel and `use.laravelSecret`. |
+| Server startup times out | Check `storage/logs/laravel.log`, missing assets, and whether `APP_URL` responds successfully. |
+| Port already in use or requests reach the wrong app | Choose another port with `playwright:env --url=...` and update `baseURL`. Outside CI, an existing responding server is reused. |
+| `APP_ENV` conflict | Do not load `.env` into Node; use `.env.e2e` or leave the process environment alone. |
+| SQLite `database is locked` | Keep the generated DB_URL lock settings and use PHP 8.4+ for immediate transactions. Avoid concurrent suite-wide resets. |
+| Tests pass alone but fail together | Look for shared mutable rows, fixed unique values, or resets running during other tests. |
+| Config or time does not reach browser requests | Check custom route handlers, new browser contexts and the app-host match. |
+| Artisan reports an unknown numbered argument | Use a command string, not a CLI token array as the second argument. |
 
-test('example', async ({ laravel }) => {
+## Laravel Boost
 
-    /** 🏃 RUN ARTISAN COMMANDS */
-    const output = await laravel.artisan('migrate:fresh');
-    /**
-     * output.code: number - The exit code of the command
-     * output.output: string - The output of the command
-     */
-    /** with parameters */
-    await laravel.artisan('db:seed', ['--class', 'DatabaseSeeder']);
+The package ships a Laravel Boost guideline and a `laravel-playwright-development` skill covering environments, per-test state, subdomains and common failures. Select `saucebase/laravel-playwright` during `php artisan boost:install`, or add it to `packages` in `boost.json` and run `php artisan boost:update`.
 
+## Upgrading from v1
 
-    /** 🗑️ TRUNCATE TABLES */
-    await laravel.truncate();
-    /** in specific DB connections */
-    await laravel.truncate(['connection1', 'connection2']);
+- The endpoints are disabled in `local`. Use the dedicated E2E environment. If you published config previously, change `environments` to `['e2e', 'testing']`.
+- Dynamic configuration, time travel and boot functions are per test. State moved from `storage/laravel-playwright-config.json` to `storage/framework/playwright/<test-id>.json`.
+- Custom clients must send `X-Playwright-Test`. State-changing endpoints return HTTP 400 without it; the supplied fixture handles it automatically.
+- `DynamicConfig::set()`, `get()`, `getAll()`, `load()` and `delete()` take the test ID as their first argument.
+- Artisan commands run from the application root.
+- Laravel 12 or 13 is required.
 
+## Credits
 
-    /** 🏭 CREATE MODELS FROM FACTORIES */
-    /**
-     * Create a App\Models\User model
-     * user will be an object of the model
-     */
-    const user = await laravel.factory('User');
-    /** Create a App\Models\User model with attributes */
-    await laravel.factory('User', { name: 'John Doe' });
-    /**
-     * Create 5 App\Models\User models
-     * users will be an array of the models
-     */
-    const users = await laravel.factory('User', {}, 5);
-    /** Create a CustomModel model */
-    await laravel.factory('CustomModel');
-
-
-    /** 💾 RUN A DATABASE QUERY */
-    await laravel.query('DELETE FROM users');
-    /** with bindings */
-    await laravel.query('DELETE FROM users WHERE id = ?', [1]);
-    /** on a specific connection */
-    await laravel.query('DELETE FROM users', [], { connection: 'connection1' });
-    /** unprepared statement */
-    await laravel.query(`
-        DROP SCHEMA public CASCADE;
-        CREATE SCHEMA public;
-        GRANT ALL ON SCHEMA public TO public;
-    `, [], { unprepared: true });
-
-
-    /** 🔍 RUN A SELECT QUERY */
-    /** returns an array of objects */
-    const blogs = await laravel.select('SELECT * FROM blogs');
-    /** with bindings */
-    await laravel.select('SELECT * FROM blogs WHERE id = ?', [1]);
-    /** on a specific connection */
-    await laravel.select('SELECT * FROM blogs', {}, { connection: 'connection1' });
-
-
-    /** ⚙️ RUN A PHP FUNCTION */
-    /**
-     * Output is JSON encoded in Laravel and decoded in Playwright
-     * The following examples call this function:
-     * function sayHello($name) { return "Hello, $name!"; }
-     */
-    const funcOutput = await laravel.callFunction('sayHello');
-    /** with positional parameters */
-    await laravel.callFunction('sayHello', ['John']);
-    /** with named parameters */
-    await laravel.callFunction('sayHello', { name: 'John' });
-    /** static class method */
-    await laravel.callFunction("App\\MyAwesomeClass::method");
-
-});
-
-
-```
-
-## 🔄 Dynamic Configuration
-
-You can update Laravel config for every subsequent request **of the same test**, until the test ends.
-
-The state is kept per test. The `laravel` fixture gives each test an id and sends it in an `X-Playwright-Test` header, on its own calls and on the browser's requests to the app. The server applies a test's state only to requests that carry its id. Parallel tests never see or remove each other's config, time or boot functions, and requests without the header (your own browser, a queue worker) see none.
-
-- Only requests to the app carry the header: the `baseURL` host and its subdomains. Third-party requests (Stripe, CDNs) are left alone, so no CORS preflight fails. Override the match with the `laravelIsAppUrl: (url: URL) => boolean` option.
-- The header is added with `context.route()`. If you add your own route for app URLs, call `route.fallback()`, not `route.continue()`, so the header is still added.
-- A context you create yourself (`browser.newContext()`) doesn't get the header.
-
-```ts
-import { test } from '@saucebase/laravel-playwright';
-
-test('example', async ({ laravel }) => {
-
-    /** 🔧 SET DYNAMIC CONFIG */
-    /**
-     * Persists for all subsequent requests until the test ends
-     * and tearDown is called (done automatically)
-     */
-    await laravel.config('app.timezone', 'America/Sao_Paulo');
-
-    /** ⏰ TRAVEL TO A TIME */
-    /** similar to Laravel's `travelTo` method */
-    await laravel.travel('2022-01-01 12:00:00');
-
-});
-```
-
-## 🔁 Boot Functions
-
-Boot functions let you run PHP code **at the start of every subsequent Laravel request** during a test. This is the right tool when you need a service binding or side effect to be in place for browser-driven requests — not just during test setup.
-
-A common use case is swapping a real external service (payment gateway, mailer, SMS provider) with a fake for the duration of a test.
-
-**1. Create a helper class in your app** (e.g. `app/E2EHelpers.php`):
-
-```php
-<?php
-
-namespace App;
-
-use App\Services\PaymentGateway;
-use App\Services\FakePaymentGateway;
-use App\Services\Mailer;
-use App\Services\NullMailer;
-
-class E2EHelpers
-{
-    /**
-     * Swap real services for fakes. Called at boot on every request in the test.
-     */
-    public static function useFakeServices(): void
-    {
-        app()->bind(PaymentGateway::class, FakePaymentGateway::class);
-        app()->bind(Mailer::class, NullMailer::class);
-    }
-}
-```
-
-**2. Register it in your Playwright test:**
-
-```ts
-import { test } from '@saucebase/laravel-playwright';
-
-test('checkout with fake payment gateway', async ({ laravel, page }) => {
-
-    // Register once — runs at boot on every subsequent request this test makes
-    await laravel.registerBootFunction('App\\E2EHelpers::useFakeServices');
-
-    // From here, every page load and API call the browser makes will use the fakes
-    const user = await laravel.factory('User');
-    await laravel.artisan('db:seed', ['--class', 'ProductSeeder']);
-
-    await page.goto('/checkout');
-    await page.fill('[name="card_number"]', '4242424242424242');
-    await page.click('button[type="submit"]');
-
-    await expect(page.locator('.order-confirmation')).toBeVisible();
-
-});
-```
-
-> **Why not use `callFunction` instead?**
-> `callFunction` runs once and returns. `registerBootFunction` runs at the start of **every** request the browser makes during the test, so service bindings registered in the boot phase are in place for the full request lifecycle — including middleware, controllers, and event listeners.
-
-> **Note:** The helper class only needs to exist in your `e2e` and `testing` environments. You can guard it with an environment check or keep it out of production deployments entirely.
-
-## 🤖 Laravel Boost
-
-The package ships a [Laravel Boost](https://laravel.com/docs/boost) guideline and a `laravel-playwright-development` skill, covering the e2e environment, per-test state, subdomains and common failures. Boost asks before including third-party packages: pick `saucebase/laravel-playwright` in `php artisan boost:install`, or add it to `packages` in `boost.json` and run `php artisan boost:update`.
-
-## ⬆️ Upgrading from v1
-
-- **The endpoints are off in `local`.** The default `environments` is now `['e2e', 'testing']`. Serve the suite with `APP_ENV=e2e` (see [A dedicated environment](#️-a-dedicated-environment)). If you published the config, update `environments` there.
-- **Dynamic config, `travel()` and boot functions are per test.** State moved from `storage/laravel-playwright-config.json` to `storage/framework/playwright/<test-id>.json`, and only applies to requests that carry the test's `X-Playwright-Test` header. The fixture sends the header for you. If you call the endpoints from your own client, send it yourself; `dynamicConfig`, `travel` and `registerBootFunction` return 400 without it.
-- `DynamicConfig::set()`, `get()`, `getAll()`, `load()` and `delete()` now take the test id as their first argument.
-- **Artisan commands run from the application root**, like the CLI, rather than the web server's `public/`.
-- Requires Laravel 12 or 13.
-
-## 🙏 Credits
-
-This package was inspired by [hyvor/laravel-playwright](https://github.com/hyvor/laravel-playwright)
+Inspired by [hyvor/laravel-playwright](https://github.com/hyvor/laravel-playwright).

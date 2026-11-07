@@ -83,7 +83,7 @@ class f {
             `);
     return await n.json();
   }
-  async artisan(t, e = []) {
+  async artisan(t, e = {}) {
     return await this.call("/artisan", { command: t, parameters: e });
   }
   async truncate(t = []) {
