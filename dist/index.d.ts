@@ -31,7 +31,7 @@ export declare class Laravel {
     readonly testId: string;
     constructor(baseUrl: string, request: APIRequestContext, secret?: string | undefined, testId?: string);
     call<T = unknown>(endpoint: string, data?: object): Promise<T>;
-    artisan(command: string, parameters?: string[]): Promise<{
+    artisan(command: string, parameters?: Record<string, string | number | boolean | (string | number)[]>): Promise<{
         code: number;
         output: string;
     }>;
